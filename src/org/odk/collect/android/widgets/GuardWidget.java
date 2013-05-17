@@ -150,7 +150,7 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
                 Intent i = new Intent(intentName);
                 try {
                 	Collect.getInstance().getFormController().setIndexWaitingForData(mPrompt.getIndex());
-                	fireActivity(i);
+                	getMessage(i);
                 } catch (ActivityNotFoundException e) {
                     mHasExApp = false;
                     if ( !mPrompt.isReadOnly() ) {
@@ -181,7 +181,7 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
         
     }
 
-    protected void fireActivity(Intent i) throws ActivityNotFoundException {
+    protected void getMessage(Intent i) throws ActivityNotFoundException {
        	Collect.getInstance().getActivityLogger().logInstanceAction(this, "launchIntent", 
     			i.getAction(), mPrompt.getIndex());
         ((Activity) getContext()).startActivityForResult(i,FormEntryActivity.EX_STRING_CAPTURE);
@@ -288,12 +288,10 @@ import org.javarosa.core.model.data.IAnswerData;
 import org.javarosa.core.model.data.StringData;
 import org.javarosa.form.api.FormEntryPrompt;
 import org.odk.collect.android.ITriggerManagerService;
-import org.odk.collect.android.R;
 import org.odk.collect.android.activities.FormEntryActivity;
 import org.odk.collect.android.application.Collect;
 import org.odk.collect.android.logic.FormController;
 
-import android.app.Activity;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.method.TextKeyListener;
@@ -302,7 +300,6 @@ import android.util.TypedValue;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TableLayout;
-import org.odk.collect.android.utilities.TriggerManagerService;
 
 public class GuardWidget extends QuestionWidget implements IBinaryWidget {
 
@@ -310,14 +307,16 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
     private boolean serviceRunning;
     ITriggerManagerService service;
     TriggerManagerServiceConnection connection;
+    FormEntryActivity listener;
 
     public GuardWidget(Context context, FormEntryPrompt p) {
         super(context, p);
 
         //starts the service when widget starts;
-        initService();
+        initService(context);
 
         TableLayout.LayoutParams params = new TableLayout.LayoutParams();
+        listener = (FormEntryActivity) context;
         params.setMargins(7, 5, 7, 5);
         mAnswer = new EditText(context);
         mAnswer.setId(QuestionWidget.newUniqueId());
@@ -333,23 +332,24 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
         if (s != null) {
             mAnswer.setText(s);
         } else {
-            String appearance = p.getAppearanceHint();
-            String[] attrs = appearance.split(":");
-            final String intentName = attrs[1];
-            Intent i = new Intent(intentName);
-            try {
-                Collect.getInstance().getFormController().setIndexWaitingForData(mPrompt.getIndex());
-                fireActivity(i);
-            } catch (ActivityNotFoundException e) {
+                String appearance = p.getAppearanceHint();
+                String[] attrs = appearance.split(":");
+                final String intentName = attrs[1];
+                Intent i = new Intent(intentName);
 
-            }
+                    Collect.getInstance().getFormController()
+                            .setIndexWaitingForData(mPrompt.getIndex());
+            safelyQueryTMS(context);
+
+
+
         }
 
         mAnswer.addTextChangedListener(new TextWatcher() {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
 
-                // TODO Auto-generated method stub
+                cancelWaitingForBinaryData();
             }
 
             @Override
@@ -370,25 +370,29 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
         addView(mAnswer);
     }
 
-    protected void fireActivity(Intent i) throws ActivityNotFoundException {
-        Collect.getInstance().getActivityLogger().logInstanceAction(this, "launchIntent",
-                i.getAction(), mPrompt.getIndex());
+    protected void getMessage()  {
+    //    Collect.getInstance().getActivityLogger().logInstanceAction(this,
+      //          "launchIntent",
+        //        i.getAction(), mPrompt.getIndex());
 //        ((Activity) getContext()).startActivityForResult(i,
 //                FormEntryActivity.EX_STRING_CAPTURE);
 
         Integer v1, v2, res = -1;
         v1 = 2;
         v2 = 3;
-        Log.d(GuardWidget.TAG, "Adding");
-        try {
 
+        Log.d(GuardWidget.TAG, "Adding");
+
+        try {
           res = service.add(v1, v2);
         } catch (RemoteException e) {
             Log.d(GuardWidget.TAG, "onClick failed with: " + e);
             e.printStackTrace();
         }
+        Log.d(GuardWidget.TAG, res.toString());
         setBinaryData(Integer.toString(res));
-        releaseService();
+
+        //releaseService();
     }
 
 
@@ -397,6 +401,7 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
         // TODO Auto-generated method stub
         mAnswer.setText((String) answer);
         Collect.getInstance().getFormController().setIndexWaitingForData(null);
+        listener.advance();
     }
 
     @Override
@@ -448,7 +453,6 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
 
     public class TriggerManagerServiceConnection implements ServiceConnection {
 
-
         public void onServiceConnected(ComponentName name, IBinder boundService) {
             service = ITriggerManagerService.Stub.asInterface((IBinder) boundService);
             Log.d(GuardWidget.TAG, "onServiceCOnnected() connected");
@@ -468,15 +472,18 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
     }
 
     // Binds this activity to the service
-    private void initService() {
+    private void initService(Context context) {
+        if (service == null){
         connection = new TriggerManagerServiceConnection();
         Intent i = new Intent();
-        i.setClassName(this.getContext()
+        i.setClassName(context
                 , "org.odk.collect.android.utilities.TriggerManagerService"
         );
-        boolean ret = this.getContext().bindService(i, connection,
+
+        boolean ret = context.bindService(i, connection,
                 Context.BIND_AUTO_CREATE);
         Log.d(TAG, "initService() bound with " + ret);
+        }
     }
 
     //    Unbinds this activity from the service
@@ -484,6 +491,16 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
         this.getContext().unbindService(connection);
         connection = null;
         Log.d(TAG, "releaseService() unbound");
+    }
+    public void safelyQueryTMS(Context context){
+        Log.d(TAG, "Trying to query the service");
+        if(service==null){
+            Log.d(TAG, "The service was not connected -> connecting.");
+            initService(context);
+        }else{
+            Log.d(TAG, "The Service is already connected -> querying the message.");
+            getMessage();
+        }
     }
 
 }
