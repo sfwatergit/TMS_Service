@@ -1,4 +1,4 @@
 #Trigger Manager Service
 ## XLAB Mobile
 
-* Not working yet!
+* This will be the Remote Service for Trigger Mgmt, but it's not working yet!
