@@ -80,7 +80,8 @@ import android.widget.Toast;
  *
  * @author mitchellsundt@gmail.com
  *
- *//*
+ */
+/*
 public class GuardWidget extends QuestionWidget implements IBinaryWidget {
 
     private boolean mHasExApp = true;
@@ -203,7 +204,7 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
     }
 
 
-    *//**
+//**
  * Allows answer to be set externally in {@Link FormEntryActivity}.
  *//*
     @Override
