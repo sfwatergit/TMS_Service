@@ -310,7 +310,6 @@ public class GuardWidget extends QuestionWidget implements IBinaryWidget {
     ITriggerManagerService service;
     TriggerManagerServiceConnection connection;
 
-
     public GuardWidget(Context context, FormEntryPrompt p) {
         super(context, p);
 
